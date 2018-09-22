@@ -1,0 +1,37 @@
+#' sat_getBinned
+#'
+#' sat_getBinned retrives binned alleles from the sat repository and assembles them into a tibble with dims identical
+#'  to the expected input format.
+#'
+#'@param repo the sat repository
+#'
+#'@return A tibble with dims identical to the expected input format.
+#'
+#'@export
+
+# function ---------------------------------------------------------------------------------------------
+sat_getBinned <- function (repo) {
+
+  p <- length(repo[[1]]$out[-1])
+  l <- length(repo)
+  L <- length(repo[[1]]$out[[1]])
+
+  out <- tibble::as_tibble(matrix(NA, nrow = L, ncol = 1 + (l * p)))
+
+  out[1] <- repo[[1]]$out[[1]]
+  names_out <- vector("character", (l*p) + 1)
+
+  names_out[1] <- "id"
+
+  for (i in 1:l) {
+
+    out[,(((i - 1) * p) + 1):(i * p) + 1] <- repo[[i]]$out[-1]
+
+    names_out[(((i - 1) * p) + 1):(i * p) + 1] <- c(names(repo)[i], stringr::str_c(names(repo[i]), "_", 1:(p-1)))
+
+  }
+
+  names(out) <- names_out
+
+  return(out)
+}

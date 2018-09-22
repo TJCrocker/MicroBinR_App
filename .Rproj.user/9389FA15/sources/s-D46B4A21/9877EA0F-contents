@@ -1,0 +1,1 @@
+dat <- readr::read_csv("/home/tj/Documents/Data/R Directories/AlleleBinning/Data_Files/Tilia.csv")

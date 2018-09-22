@@ -1,0 +1,232 @@
+library(shiny)
+
+# Define UI for allele binning app ----
+ui <- fluidPage(
+  
+  # App title ----
+  titlePanel("Allele Binning with SSRr"),
+  
+  # Tabset layout ----
+  tabsetPanel(
+    
+    # Define upload and binning tab ----
+    tabPanel("Upload Data",
+             
+             # Tab title ----
+             titlePanel("Upload Data"),
+             
+             # Sidebar layout with input and output definitions ----
+             sidebarLayout(
+               
+               # Sidebar panel for inputs ----
+               sidebarPanel(
+                 
+                 # Input: Select a file ----
+                 fileInput("file1", "Choose CSV File",
+                           multiple = TRUE,
+                           accept = c("text/csv",
+                                      "text/comma-separated-values,text/plain",
+                                      ".csv")),
+                 
+                 # Horizontal line ----
+                 tags$hr(),
+                 
+                 # Input: Select separator ----
+                 radioButtons("sep", "Separator",
+                              choices = c(Comma = ",",
+                                          Semicolon = ";",
+                                          Tab = "\t"),
+                              selected = ","),
+                 
+                 # Input: Select quotes ----
+                 radioButtons("quote", "Quote",
+                              choices = c(None = "",
+                                          "Double Quote" = '"',
+                                          "Single Quote" = "'"),
+                              selected = '"'),
+                 
+                 
+                 # Horizontal line ----
+                 tags$hr(),
+                 
+                 # Input: Silder select ploidy ----
+                 sliderInput("ploidy", "Ploidy Level", min = 1, max = 6, value = 2, step = 1),
+                 
+                 # Input: Action Button bin ----
+                 actionButton(inputId = "binAll", label = "Go!")
+                 
+               ),
+               
+               
+               # Main panel for displaying outputs ----
+               mainPanel(
+                 
+                 # Output: Data file ----
+                 tableOutput("unbinned")
+                 
+               )
+               
+             )
+    ),
+    
+    # Define Bin tab ----
+    tabPanel("Bin",
+             
+             # Tab Title ----
+             titlePanel("Plot density of mirosatilite loci"),
+             
+             # Sidebar layout with input and output definitions ----
+             sidebarLayout(
+               
+               # Sidebar panle for input ----
+               sidebarPanel(
+                 
+                 # Input: Select a locus ----
+                 htmlOutput("selectLocus"), 
+                 
+                 # Input: Sigma slider ----
+                 sliderInput("sgma", "Select sigma", min = 0.1, max = 1, value = 0.4, step = 0.05),
+                 
+                 
+                 # Input: Range slider ----
+                 sliderInput("range", "Select Range", min = 5, max = 25, value = 20, step = 1)
+                 
+               ),
+               
+              
+               tabsetPanel(
+                 tabPanel("plot", 
+                          # Output: Density plot ----
+                          plotOutput("plot")
+                          ),
+                 tabPanel("Stats",
+                          # Output: bin statisitcs ----
+                          tableOutput("stat")
+                          )
+                
+               
+                 )
+               
+               
+             )
+    ),
+    
+    # Define Download tab ----
+    tabPanel("Download",
+             
+             # Sidebar layout ----
+             sidebarLayout(
+               
+               # Sidebar Pannel ----
+               sidebarPanel(
+                 
+               ),
+               
+               # Main Pannel ----
+               mainPanel(
+                 
+               )
+             )
+             
+    )
+    
+  )
+)
+
+# Define server logic to read selected file ----
+server <- function(input, output, session) {
+  
+  
+ repo <- reactive({
+    
+    # input$file1 will be NULL initially. After the user selects
+    # and uploads a file, repo will be generated.
+    
+    
+    req(input$file1)
+    
+    df <- read.csv(input$file1$datapath,
+                   header = TRUE,
+                   sep = input$sep,
+                   quote = input$quote)
+    
+    repo <- MicroBinner::sat_makeDatabase(df, input$ploidy)
+    
+    return(repo)
+    
+  })
+  
+  # generate a table of binned data ----
+  output$unbinned <- renderTable({
+    
+    req(repo())
+    
+    out <- MicroBinner::sat_return(repo(), "data")
+    
+    return(out)
+    
+  })
+  
+  # create sigma 
+  sgma <- reactive({
+    
+    req(repo())
+    
+    l <- length(repo())
+    
+    
+  })
+  
+  # calculate score, bin stats and plot for each loci where $complete = "FALSE"
+  
+  repo1 <- reactive({
+    
+    req(input$binAll)
+    
+    repo1 <- MicroBinner::sat_assess(repo())
+    
+    return(repo1)
+  })
+  
+  reactive(print(input$sgma))
+  reactive(print(input$range))
+  
+  # generate a vector of marker names ----
+  output$names <- reactive({
+    
+    req(input$binAll)
+    
+    names(repo1())
+    
+  })
+  
+  # Update locus selection ----
+  output$selectLocus <- renderUI({
+    
+    req(input$binAll)
+    
+    x <- names(repo1())
+    
+    selectInput("locus", "Select a locus", x)
+    
+  })
+  
+  # generate a plot ----
+  output$plot <- renderPlot({
+    
+    req(input$binAll, input$locus)
+    
+    return(repo1()[[input$locus]]$plot)
+    
+  })
+  
+  # generate bin stats ----
+  output$stat <- renderTable({
+    
+    req(input$binAll, input$locus)
+    
+    return(repo1()[[input$locus]]$stat)
+  })
+}
+
+shinyApp(ui, server)

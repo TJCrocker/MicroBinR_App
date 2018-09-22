@@ -1,0 +1,176 @@
+library(shiny)
+
+# Define UI for allele binning app ----
+ui <- fluidPage(
+  
+  # App title ----
+  titlePanel("Allele Binning with SSRr"),
+  
+  # Tabset layout ----
+  tabsetPanel(
+    
+    # Define upload and binning tab ----
+    tabPanel("Upload Data",
+             
+             # Tab title ----
+             titlePanel("Upload and bin dataset"),
+             
+             # Sidebar layout with input and output definitions ----
+             sidebarLayout(
+               
+               # Sidebar panel for inputs ----
+               sidebarPanel(
+                 
+                 # Input: Select a file ----
+                 fileInput("file1", "Choose CSV File",
+                           multiple = TRUE,
+                           accept = c("text/csv",
+                                      "text/comma-separated-values,text/plain",
+                                      ".csv")),
+                 
+                 # Horizontal line ----
+                 tags$hr(),
+                 
+                 # Input: Silder select ploidy ----
+                 
+                 sliderInput("ploidy", "Ploidy Level", min = 1, max = 6, value = 2, step = 1),
+                 
+                 # Horizontal line ----
+                 tags$hr(),
+                 
+                 # Input: Checkbox if file has header ----
+                 checkboxInput("header", "Header", TRUE),
+                 
+                 # Input: Select separator ----
+                 radioButtons("sep", "Separator",
+                              choices = c(Comma = ",",
+                                          Semicolon = ";",
+                                          Tab = "\t"),
+                              selected = ","),
+                 
+                 # Input: Select quotes ----
+                 radioButtons("quote", "Quote",
+                              choices = c(None = "",
+                                          "Double Quote" = '"',
+                                          "Single Quote" = "'"),
+                              selected = '"'),
+                 
+                 # Horizontal line ----
+                 tags$hr(),
+                 
+                 # Input: Select number of rows to display ----
+                 radioButtons("disp", "Display",
+                              choices = c(Head = "head",
+                                          All = "all"),
+                              selected = "head")
+                 
+               ),
+               
+               # Main panel for displaying outputs ----
+               mainPanel(
+                 
+                 # Output: Data file ----
+                 tableOutput("contents")
+                 
+               )
+               
+             )
+    ),
+    
+    # Define plot tab ----
+    tabPanel("Plot Data",
+             
+             # Tab Title ----
+             titlePanel("Plot density of mirosatilite loci"),
+             
+             # Sidebar layout with input and output definitions ----
+             sidebarLayout(
+               
+               # Sidebar panle for input ----
+               sidebarPanel(
+                 
+                 # Input: Select a locus ----
+                 htmlOutput("selectLocus"), 
+                 
+                 # Input: Sigma slider
+                 sliderInput("sigma", "Select sigma", min = 0.1, max = 1, value = 0.4, step = 0.05)
+               ),
+               
+               # Output: Density plot ----
+               plotOutput("plot")
+             ))
+  )
+)
+
+# Define server logic to read selected file ----
+server <- function(input, output, session) {
+  
+  
+  repo <- reactive({
+    
+    # input$file1 will be NULL initially. After the user selects
+    # and uploads a file, repo will be generated.
+    
+    
+    req(input$file1)
+    
+    df <- read.csv(input$file1$datapath,
+                   header = input$header,
+                   sep = input$sep,
+                   quote = input$quote)
+    
+    `%>%` <- magrittr::`%>%`
+    
+    repo <- SSRr::sat_SSRr(df, input$ploidy, sigma = input$sigma)
+    
+    return(repo)
+    
+  }) 
+  
+  # generate a table of binned data ----
+  output$contents <- renderTable({
+    
+    req(input$file1)
+    
+    out <- SSRr::sat_getBinned(repo())
+    
+    if(input$disp == "head") {
+      return(head(out))
+    }
+    else {
+      return(out)
+    }
+    
+  })
+  
+  # generate a vector of marker names ----
+  output$names <- reactive({
+    
+    req(input$file1)
+    
+    names(repo())
+    
+  })
+  
+  # Update locus selection ----
+  output$selectLocus <- renderUI({
+    
+    req(input$file1)
+    
+    x <- names(repo())
+    
+    selectInput("locus", "Select a locus", x)
+    
+  })
+  
+  # generate a plot ----
+  output$plot <- renderPlot({
+    
+    req(input$file1)
+    
+    SSRr::sat_plot(repo(), as.character(input$locus))
+  
+  })
+}
+
+shinyApp(ui, server)
